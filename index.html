@@ -1532,7 +1532,7 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
           const type = async (k, text) => { const el = s.querySelector(`[data-f="${k}"]`); el.classList.add('is-typing');
             for (const ch of text) { el.textContent += ch; await w(45); } el.classList.remove('is-typing'); };
           await w(450); await type('a', 'Жандос');
-          await w(200); await type('b', '@anna');
+          await w(200); await type('b', '@zhandos');
           await w(200); await type('c', 'Хотим, чтобы заявки с сайта сами попадали в CRM');
           await w(300); s.querySelector('.mp-form__btn').classList.add('is-on');
         } },
