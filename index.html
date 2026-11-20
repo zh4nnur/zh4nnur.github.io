@@ -361,6 +361,23 @@ a { color: inherit; text-decoration: none; }
   @media (prefers-reduced-motion: reduce) {
     .menu, .menu.is-open { clip-path: none; }
   }
+
+  /* ===== iPhone и iPad (движок Safari): меню открывается растущим чёрным кругом (transform: scale),
+     а не маской clip-path — Safari перерисовывает маску каждый кадр, и меню дёргается.
+     Класс .ios-menu ставит скрипт только на устройствах Apple с сенсорным экраном (2026-11-20).
+     Android и компьютер — без изменений. ===== */
+  .menu__disc { display: none; }
+  .ios-menu .menu, .ios-menu .menu.is-open { clip-path: none; transition: none; }
+  .ios-menu .menu__veil, .ios-menu .menu__glow { display: none; }
+  /* Круг 400 точек, растёт до радиуса --mr (scale = 2·R / 400); центр — точка на кнопке «Меню» */
+  .ios-menu .menu__disc { display: block; position: absolute; left: calc(var(--mx) - 200px); top: calc(var(--my) - 200px);
+    width: 400px; height: 400px; border-radius: 50%; background: #000; pointer-events: none;
+    transform: scale(0); will-change: transform;
+    transition: transform .38s cubic-bezier(.55,0,.75,.2); }
+  .ios-menu .menu.is-open .menu__disc { transform: scale(var(--ms, 5)); transition: transform .75s cubic-bezier(.7,0,.2,1); }
+  /* Содержимое меню кругом не обрезается — проявляем его чуть позже, когда круг уже накрыл экран */
+  .ios-menu .menu.is-open .menu-link { transition: opacity .5s ease calc(var(--i) * 55ms + 320ms), transform .7s cubic-bezier(.2,.8,.2,1) calc(var(--i) * 55ms + 320ms), color .3s ease; }
+  .ios-menu .menu.is-open .menu-foot { transition: opacity .6s ease .72s; }
   /* Заголовок в стиле React Bits «Glitch Text» (режим «полосы», короткие вспышки) */
   .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .glitch {
@@ -755,6 +772,8 @@ body.fm-open { overflow: hidden; }
   opacity: 0; transform: translate(-50%, 16px); transition: opacity .3s ease, transform .3s ease; }
 .ck.is-on { opacity: 1; transform: translate(-50%, 0); transition: opacity .5s ease, transform .6s cubic-bezier(.2,.8,.2,1); }
 .ck[hidden] { display: none; }
+/* Меню лежит внутри первого экрана (свой слой z-index 1), поэтому z-index не помогает — пока меню открыто, плашку прячем */
+body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
 .ck__text { margin: 0 0 16px; font-size: 15px; font-weight: 300; line-height: 1.5; color: rgba(255,255,255,.72); }
 .ck__actions { display: flex; gap: 10px; }
 .ck__btn { height: 42px; padding: 0 22px; border-radius: 999px; cursor: pointer; font: 400 15px/1 'Jost', sans-serif;
@@ -1124,6 +1143,7 @@ body.fm-open { overflow: hidden; }
     <!-- Меню на весь экран -->
     <div class="menu" id="menu" role="dialog" aria-modal="true" aria-label="Меню" hidden>
       <div class="menu__veil" aria-hidden="true"></div>
+      <div class="menu__disc" aria-hidden="true"></div>
       <div class="menu__glow" id="menu-glow" aria-hidden="true"></div>
       <div class="wrap menu-inner">
         <div aria-hidden="true"></div>
@@ -1422,6 +1442,9 @@ body.fm-open { overflow: hidden; }
     const menuGlow = document.getElementById('menu-glow');
     const menuReduce = matchMedia('(prefers-reduced-motion: reduce)');
     const isOpen = () => menuBtn.getAttribute('aria-expanded') === 'true';
+    // iPhone и iPad: свойство -webkit-touch-callout понимает только Safari на устройствах Apple с сенсорным экраном
+    if (window.CSS && CSS.supports('-webkit-touch-callout', 'none')) document.documentElement.classList.add('ios-menu');
+    const iosMenu = () => document.documentElement.classList.contains('ios-menu');
 
     // Сцены превью. Тексты — только уже утверждённые на сайте
     const MP = [
@@ -1562,7 +1585,9 @@ body.fm-open { overflow: hidden; }
       // Центр круга — точка на кнопке; радиус — до дальнего угла экрана
       const r = menuBtn.getBoundingClientRect(), cx = r.right - 18, cy = r.top + r.height / 2;
       menu.style.setProperty('--mx', cx + 'px'); menu.style.setProperty('--my', cy + 'px');
-      menu.style.setProperty('--mr', Math.hypot(Math.max(cx, innerWidth - cx), Math.max(cy, innerHeight - cy)) + 'px');
+      const mr = Math.hypot(Math.max(cx, innerWidth - cx), Math.max(cy, innerHeight - cy));
+      menu.style.setProperty('--mr', mr + 'px');
+      menu.style.setProperty('--ms', ((mr * 2 + 8) / 400).toFixed(3));   // масштаб круга для iPhone/iPad (+8 — запас по краю)
       if (open) {
         curK = currentSection();
         menuLinks.forEach(a => a.classList.toggle('is-current', +a.dataset.k === curK));
@@ -1570,7 +1595,7 @@ body.fm-open { overflow: hidden; }
         menu.hidden = false;
         void menu.offsetWidth;
         menu.classList.add('is-open');
-        if (!glowRaf && !menuReduce.matches) glowRaf = requestAnimationFrame(glowLoop);
+        if (!glowRaf && !menuReduce.matches && !iosMenu()) glowRaf = requestAnimationFrame(glowLoop);   // на iPhone/iPad света за курсором нет
         setTimeout(() => { if (isOpen()) menuLinks[curK].focus({ preventScroll: true }); }, menuReduce.matches ? 0 : 350);
       } else {
         mpToken++;
