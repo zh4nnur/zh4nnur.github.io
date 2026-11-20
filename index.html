@@ -362,19 +362,16 @@ a { color: inherit; text-decoration: none; }
     .menu, .menu.is-open { clip-path: none; }
   }
 
-  /* ===== iPhone и iPad (движок Safari): меню открывается растущим чёрным кругом (transform: scale),
-     а не маской clip-path — Safari перерисовывает маску каждый кадр, и меню дёргается.
+  /* ===== iPhone и iPad (движок Safari): круг меню рисуется на холсте размером с экран, кадр за кадром,
+     а не маской clip-path (Safari перерисовывал маску каждый кадр) и не огромным увеличенным кругом
+     (Safari долго готовил такую картинку, открытие было без анимации).
+     На холсте внутри круга — тот же фон, что на Android: чёрный + мягкий голубой свет.
      Класс .ios-menu ставит скрипт только на устройствах Apple с сенсорным экраном (2026-11-20).
      Android и компьютер — без изменений. ===== */
   .menu__disc { display: none; }
   .ios-menu .menu, .ios-menu .menu.is-open { clip-path: none; transition: none; }
   .ios-menu .menu__veil, .ios-menu .menu__glow { display: none; }
-  /* Круг 400 точек, растёт до радиуса --mr (scale = 2·R / 400); центр — точка на кнопке «Меню» */
-  .ios-menu .menu__disc { display: block; position: absolute; left: calc(var(--mx) - 200px); top: calc(var(--my) - 200px);
-    width: 400px; height: 400px; border-radius: 50%; background: #000; pointer-events: none;
-    transform: scale(0); will-change: transform;
-    transition: transform .38s cubic-bezier(.55,0,.75,.2); }
-  .ios-menu .menu.is-open .menu__disc { transform: scale(var(--ms, 5)); transition: transform .75s cubic-bezier(.7,0,.2,1); }
+  .ios-menu .menu__disc { display: block; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   /* Содержимое меню кругом не обрезается — проявляем его чуть позже, когда круг уже накрыл экран */
   .ios-menu .menu.is-open .menu-link { transition: opacity .5s ease calc(var(--i) * 55ms + 320ms), transform .7s cubic-bezier(.2,.8,.2,1) calc(var(--i) * 55ms + 320ms), color .3s ease; }
   .ios-menu .menu.is-open .menu-foot { transition: opacity .6s ease .72s; }
@@ -1143,7 +1140,7 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
     <!-- Меню на весь экран -->
     <div class="menu" id="menu" role="dialog" aria-modal="true" aria-label="Меню" hidden>
       <div class="menu__veil" aria-hidden="true"></div>
-      <div class="menu__disc" aria-hidden="true"></div>
+      <canvas class="menu__disc" id="menu-disc" aria-hidden="true"></canvas>
       <div class="menu__glow" id="menu-glow" aria-hidden="true"></div>
       <div class="wrap menu-inner">
         <div aria-hidden="true"></div>
@@ -1573,6 +1570,64 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
     };
     menu.addEventListener('pointermove', e => { tx = e.clientX; ty = e.clientY; });
 
+    // ===== iPhone/iPad: круг меню на холсте. Каждый кадр — чёрный круг нужного радиуса,
+    // внутри него голубой свет как на Android (тот же градиент и то же место, что у .menu__glow) =====
+    const disc = document.getElementById('menu-disc');
+    let discCtx = null, discRaf = 0, discR = 0;
+    // Плавность как у CSS cubic-bezier(x1, y1, x2, y2)
+    const bezier = (x1, y1, x2, y2) => x => {
+      if (x <= 0) return 0; if (x >= 1) return 1;
+      let lo = 0, hi = 1, t = x;
+      for (let i = 0; i < 20; i++) {
+        t = (lo + hi) / 2;
+        const bx = 3 * (1 - t) * (1 - t) * t * x1 + 3 * (1 - t) * t * t * x2 + t * t * t;
+        if (bx < x) lo = t; else hi = t;
+      }
+      return 3 * (1 - t) * (1 - t) * t * y1 + 3 * (1 - t) * t * t * y2 + t * t * t;
+    };
+    const easeOpen = bezier(.7, 0, .2, 1), easeClose = bezier(.55, 0, .75, .2);
+    const drawDisc = (cx, cy, r) => {
+      const dpr = Math.min(devicePixelRatio || 1, 2), w = innerWidth, h = innerHeight;
+      if (disc.width !== Math.round(w * dpr) || disc.height !== Math.round(h * dpr)) {
+        disc.width = Math.round(w * dpr); disc.height = Math.round(h * dpr); discCtx = null;
+      }
+      const c = discCtx || (discCtx = disc.getContext('2d'));
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, w, h);
+      if (r <= 0) return;
+      c.save();
+      c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.clip();
+      c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
+      // Свет: как radial-gradient(closest-side, .2 → .07 на 55% → 0) у пятна 760×760
+      const gx = w * .3, gy = h * .5, g = c.createRadialGradient(gx, gy, 0, gx, gy, 380);
+      g.addColorStop(0, 'rgba(143,176,255,.2)'); g.addColorStop(.55, 'rgba(143,176,255,.07)'); g.addColorStop(1, 'rgba(143,176,255,0)');
+      c.fillStyle = g; c.fillRect(gx - 380, gy - 380, 760, 760);
+      c.restore();
+    };
+    const discAnim = (open, cx, cy, maxR) => {
+      cancelAnimationFrame(discRaf);
+      const from = discR, to = open ? maxR : 0;
+      if (menuReduce.matches) { discR = to; drawDisc(cx, cy, to); return; }
+      const dur = open ? 750 : 380, ease = open ? easeOpen : easeClose;
+      let t0 = 0;
+      const step = now => {
+        if (!t0) t0 = now;
+        const p = Math.min(1, (now - t0) / dur);
+        discR = from + (to - from) * ease(p);
+        drawDisc(cx, cy, discR);
+        discRaf = p < 1 ? requestAnimationFrame(step) : 0;
+      };
+      drawDisc(cx, cy, from);   // первый кадр сразу, без ожидания
+      discRaf = requestAnimationFrame(step);
+    };
+    // Если экран повернули при открытом меню — круг на весь новый экран
+    addEventListener('resize', () => {
+      if (!iosMenu() || !isOpen() || discRaf) return;
+      const r = menuBtn.getBoundingClientRect(), cx = r.right - 18, cy = r.top + r.height / 2;
+      discR = Math.hypot(Math.max(cx, innerWidth - cx), Math.max(cy, innerHeight - cy)) + 2;
+      drawDisc(cx, cy, discR);
+    });
+
     const setMenu = open => {
       menuBtn.setAttribute('aria-expanded', open);
       menuBtn.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню');
@@ -1587,7 +1642,7 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
       menu.style.setProperty('--mx', cx + 'px'); menu.style.setProperty('--my', cy + 'px');
       const mr = Math.hypot(Math.max(cx, innerWidth - cx), Math.max(cy, innerHeight - cy));
       menu.style.setProperty('--mr', mr + 'px');
-      menu.style.setProperty('--ms', ((mr * 2 + 8) / 400).toFixed(3));   // масштаб круга для iPhone/iPad (+8 — запас по краю)
+      if (iosMenu()) discAnim(open, cx, cy, mr + 2);   // iPhone/iPad: круг на холсте
       if (open) {
         curK = currentSection();
         menuLinks.forEach(a => a.classList.toggle('is-current', +a.dataset.k === curK));
