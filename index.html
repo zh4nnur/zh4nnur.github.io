@@ -745,6 +745,26 @@ body.fm-open { overflow: hidden; }
 .foot__social span { display: grid; place-items: center; width: 24px; height: 24px; }
 .foot__social svg { width: 19px; height: 19px; }
 @media (prefers-reduced-motion: reduce) { .fm__box { transform: none; } }
+
+/* ===== Плашка согласия на cookies (2026-11-20): в стиле подвала — #0a0a0a, рамка 1px, скругления.
+   Появляется через ~1 с при первом заходе, выбор запоминается. Лежит ниже меню (50) и формы (80). ===== */
+/* По центру снизу: в правом углу плашка закрывала кнопку «Обсудить задачу» первого экрана */
+.ck { position: fixed; left: 50%; bottom: 24px; z-index: 40; width: min(380px, calc(100vw - 48px));
+  padding: 20px 22px 20px; border: 1px solid rgba(255,255,255,.1); border-radius: 16px; background: #0a0a0a;
+  box-shadow: 0 16px 40px rgba(0,0,0,.55);
+  opacity: 0; transform: translate(-50%, 16px); transition: opacity .3s ease, transform .3s ease; }
+.ck.is-on { opacity: 1; transform: translate(-50%, 0); transition: opacity .5s ease, transform .6s cubic-bezier(.2,.8,.2,1); }
+.ck[hidden] { display: none; }
+.ck__text { margin: 0 0 16px; font-size: 15px; font-weight: 300; line-height: 1.5; color: rgba(255,255,255,.72); }
+.ck__actions { display: flex; gap: 10px; }
+.ck__btn { height: 42px; padding: 0 22px; border-radius: 999px; cursor: pointer; font: 400 15px/1 'Jost', sans-serif;
+  transition: background-color .25s ease, border-color .25s ease, color .25s ease, transform .25s ease; }
+.ck__btn:active { transform: scale(.97); }
+.ck__btn--yes { border: 0; background: #fff; color: #000; }
+.ck__btn--yes:hover { background: #e6e6e6; }
+.ck__btn--no { border: 1px solid rgba(255,255,255,.18); background: transparent; color: #fff; }
+.ck__btn--no:hover, .ck__btn--no:focus-visible { border-color: rgba(255,255,255,.45); background: rgba(255,255,255,.05); }
+@media (prefers-reduced-motion: reduce) { .ck, .ck.is-on { transform: translateX(-50%); } }
 </style>
 <style>
 /* =====================================================================
@@ -1073,6 +1093,24 @@ body.fm-open { overflow: hidden; }
   .fm { padding-top: 24px; }
   .menu-link { font-size: 26px; padding: 4px 0; }
 }
+
+/* --- Плашка cookies на планшете и небольших ноутбуках: в левом углу, чтобы не закрывать кнопку «Обсудить задачу» --- */
+@media (max-width: 1199px) {
+  .ck { left: 24px; transform: translateY(16px); }
+  .ck.is-on { transform: none; }
+}
+/* --- Плашка cookies на телефоне (и телефоне боком): внизу на всю ширину, кнопки 44 и поровну --- */
+@media (max-width: 600px), (max-width: 950px) and (max-height: 500px) {
+  .ck { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); width: auto; padding: 16px 16px 16px;
+    transform: translateY(16px); }
+  .ck.is-on { transform: none; }
+  .ck__text { font-size: 14.5px; margin-bottom: 14px; }
+  .ck__btn { flex: 1; height: 44px; padding: 0 16px; }
+}
+@media (max-width: 950px) and (max-height: 500px) {
+  .ck { right: auto; width: 420px; }   /* телефон боком: не во всю ширину, слева — кнопка «Обсудить задачу» справа остаётся видна */
+}
+@media (hover: none) { .ck__btn { height: 44px; } }
 </style>
 </head>
 <body>
@@ -2596,6 +2634,37 @@ body.fm-open { overflow: hidden; }
     }, { threshold: 0.4 }).observe(root);
   }
 })();
+
+// ===== Плашка согласия на cookies: показывается при первом заходе, выбор хранится в браузере посетителя =====
+document.addEventListener('DOMContentLoaded', () => {   // разметка плашки стоит ниже скрипта
+  const ck = document.getElementById('ck');
+  if (!ck) return;
+  const KEY = 'qadam-cookies';
+  let saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  if (saved) return;   // уже выбрал — плашку не показываем
+  const reduceC = matchMedia('(prefers-reduced-motion: reduce)');
+  setTimeout(() => {
+    ck.hidden = false; void ck.offsetWidth;
+    ck.classList.add('is-on');
+  }, 1000);
+  const choose = (val) => {
+    try { localStorage.setItem(KEY, val); } catch (e) {}
+    ck.classList.remove('is-on');
+    setTimeout(() => { ck.hidden = true; }, reduceC.matches ? 0 : 320);
+  };
+  ck.querySelector('.ck__btn--yes').addEventListener('click', () => choose('accepted'));
+  ck.querySelector('.ck__btn--no').addEventListener('click', () => choose('declined'));
+});
 </script>
+
+<!-- Плашка согласия на cookies -->
+<div class="ck" id="ck" role="region" aria-label="Согласие на cookies" hidden>
+  <p class="ck__text">Мы используем cookies, чтобы сайт работал удобнее. Продолжая, вы соглашаетесь с их использованием.</p>
+  <div class="ck__actions">
+    <button class="ck__btn ck__btn--yes" type="button">Принять</button>
+    <button class="ck__btn ck__btn--no" type="button">Отклонить</button>
+  </div>
+</div>
 </body>
 </html>
