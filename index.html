@@ -1443,6 +1443,43 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
     if (window.CSS && CSS.supports('-webkit-touch-callout', 'none')) document.documentElement.classList.add('ios-menu');
     const iosMenu = () => document.documentElement.classList.contains('ios-menu');
 
+    // ===== ВРЕМЕННО (2026-11-20): режим замера открытия меню — только по ссылке с ?debug=1.
+    // Табличка внизу экрана: время касания, нажатия и каждого шага открытия меню.
+    // Убрать после того, как найдём, почему на iPhone меню открывается ~5 с. =====
+    const DBG = /[?&]debug=1/.test(location.search);
+    let dbgT0 = 0, dbgBox = null, dbgLast = 0;
+    const dbg = (label, reset) => {
+      if (!DBG) return;
+      const now = performance.now();
+      if (reset || !dbgT0) { dbgT0 = now; dbgLast = now; }
+      if (!dbgBox) {
+        dbgBox = document.createElement('pre');
+        dbgBox.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;margin:0;padding:10px;max-height:45vh;overflow:auto;' +
+          'background:rgba(0,0,0,.92);color:#9f9;border:1px solid #9f9;border-radius:10px;font:12px/1.4 ui-monospace,Menlo,monospace;white-space:pre-wrap;pointer-events:auto';
+        document.body.appendChild(dbgBox);
+      }
+      dbgBox.textContent += `${String(Math.round(now - dbgT0)).padStart(5)} мс (+${Math.round(now - dbgLast)})  ${label}\n`;
+      dbgLast = now;
+      dbgBox.scrollTop = dbgBox.scrollHeight;
+    };
+    if (DBG) {
+      dbg('режим замера; iOS-режим меню: ' + (iosMenu() ? 'да' : 'нет'), true);
+      let lastTouch = -1e9;
+      ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'click'].forEach(ev =>
+        menuBtn.addEventListener(ev, e => {
+          const n = performance.now();
+          if (ev === 'touchstart' || (ev === 'pointerdown' && n - lastTouch > 1000)) {
+            if (ev === 'touchstart') lastTouch = n;
+            if (dbgBox) dbgBox.textContent = '';
+            dbg('— касание кнопки (' + ev + ')', true); return;
+          }
+          dbg(ev + ' (событие ждало ' + Math.max(0, Math.round(performance.now() - e.timeStamp)) + ' мс)');
+        }, { capture: true, passive: true }));
+      // Пульс: если скрипт сайта где-то занят дольше 150 мс — видно здесь
+      let beat = performance.now();
+      setInterval(() => { const n = performance.now(); if (n - beat > 150 && dbgT0) dbg('! страница была занята ' + Math.round(n - beat) + ' мс'); beat = n; }, 50);
+    }
+
     // Сцены превью. Тексты — только уже утверждённые на сайте
     const MP = [
       { name: 'Главная', desc: 'Создаём ИИ-ассистентов, разрабатываем бизнес⁠-⁠приложения и автоматизируем рутинные задачи. От идеи до запуска и поддержки.',
@@ -1629,27 +1666,40 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
     });
 
     const setMenu = open => {
+      dbg((open ? 'ОТКРЫТИЕ' : 'ЗАКРЫТИЕ') + ': начало');
       menuBtn.setAttribute('aria-expanded', open);
       menuBtn.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню');
       menuBtn.querySelector('.menu-label').textContent = open ? 'Закрыть' : 'Меню';
+      dbg('кнопка обновлена');
       document.body.classList.toggle('menu-open', open);
+      if (DBG) void document.body.offsetWidth;   // замер: сразу пересчитать страницу, чтобы увидеть цену этого шага
+      dbg('класс menu-open (запрет прокрутки)');
       // Пока меню открыто, видео и волны за ним не работают — так меню не тормозит
       document.dispatchEvent(new CustomEvent('menutoggle', { detail: open }));
+      dbg('волны остановлены/запущены (menutoggle)');
       const bgv = document.getElementById('bg-video');
       if (open) bgv.pause(); else if (!menuReduce.matches) bgv.play().catch(() => {});
+      dbg('видео ' + (open ? 'пауза' : 'запуск'));
       // Центр круга — точка на кнопке; радиус — до дальнего угла экрана
       const r = menuBtn.getBoundingClientRect(), cx = r.right - 18, cy = r.top + r.height / 2;
       menu.style.setProperty('--mx', cx + 'px'); menu.style.setProperty('--my', cy + 'px');
       const mr = Math.hypot(Math.max(cx, innerWidth - cx), Math.max(cy, innerHeight - cy));
       menu.style.setProperty('--mr', mr + 'px');
+      dbg('размер круга посчитан');
       if (iosMenu()) discAnim(open, cx, cy, mr + 2);   // iPhone/iPad: круг на холсте
+      dbg('первый кадр круга');
       if (open) {
         curK = currentSection();
+        dbg('найден текущий раздел');
         menuLinks.forEach(a => a.classList.toggle('is-current', +a.dataset.k === curK));
         mpShown = -1; mpBody.innerHTML = ''; setHot(null);
+        dbg('превью подготовлено');
         menu.hidden = false;
         void menu.offsetWidth;
+        dbg('меню показано в разметке');
         menu.classList.add('is-open');
+        if (DBG) requestAnimationFrame(() => { dbg('кадр 1 нарисован'); requestAnimationFrame(() => dbg('кадр 2 нарисован')); });
+        if (DBG) setTimeout(() => dbg('меню открыто (0,8 с после старта)'), 800);
         if (!glowRaf && !menuReduce.matches && !iosMenu()) glowRaf = requestAnimationFrame(glowLoop);   // на iPhone/iPad света за курсором нет
         setTimeout(() => { if (isOpen()) menuLinks[curK].focus({ preventScroll: true }); }, menuReduce.matches ? 0 : 350);
       } else {
