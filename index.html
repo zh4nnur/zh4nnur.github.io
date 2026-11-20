@@ -372,6 +372,11 @@ a { color: inherit; text-decoration: none; }
   .ios-menu .menu, .ios-menu .menu.is-open { clip-path: none; transition: none; }
   .ios-menu .menu__veil, .ios-menu .menu__glow { display: none; }
   .ios-menu .menu__disc { display: block; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  /* ВРЕМЕННО (2026-11-20): тестовые режимы для замера на iPhone — только по ссылке ?debug=1&test=… */
+  html.dbg-nolock body.menu-open { overflow: visible; }                    /* test=lock: без запрета прокрутки */
+  html.dbg-noblur .blob { display: none; }                                 /* test=blur: без размытого пятна */
+  html.dbg-noblur .bg video { -webkit-mask-image: none; mask-image: none; } /* …и без маски по краю видео */
   /* Содержимое меню кругом не обрезается — проявляем его чуть позже, когда круг уже накрыл экран */
   .ios-menu .menu.is-open .menu-link { transition: opacity .5s ease calc(var(--i) * 55ms + 320ms), transform .7s cubic-bezier(.2,.8,.2,1) calc(var(--i) * 55ms + 320ms), color .3s ease; }
   .ios-menu .menu.is-open .menu-foot { transition: opacity .6s ease .72s; }
@@ -1463,7 +1468,10 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
       dbgBox.scrollTop = dbgBox.scrollHeight;
     };
     if (DBG) {
-      dbg('режим замера; iOS-режим меню: ' + (iosMenu() ? 'да' : 'нет'), true);
+      const TEST = (location.search.match(/[?&]test=(\w+)/) || [])[1] || '';
+      if (TEST === 'lock' || TEST === 'all') document.documentElement.classList.add('dbg-nolock');
+      if (TEST === 'blur' || TEST === 'all') document.documentElement.classList.add('dbg-noblur');
+      dbg('режим замера; тест: ' + (TEST || 'нет') + '; iOS-режим меню: ' + (iosMenu() ? 'да' : 'нет'), true);
       let lastTouch = -1e9;
       ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'click'].forEach(ev =>
         menuBtn.addEventListener(ev, e => {
@@ -1471,7 +1479,7 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
           if (ev === 'touchstart' || (ev === 'pointerdown' && n - lastTouch > 1000)) {
             if (ev === 'touchstart') lastTouch = n;
             if (dbgBox) dbgBox.textContent = '';
-            dbg('— касание кнопки (' + ev + ')', true); return;
+            dbg('— касание кнопки (' + ev + '); тест: ' + (TEST || 'нет'), true); return;
           }
           dbg(ev + ' (событие ждало ' + Math.max(0, Math.round(performance.now() - e.timeStamp)) + ' мс)');
         }, { capture: true, passive: true }));
