@@ -1363,7 +1363,7 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
       <form class="fm__card" id="cta-form" novalidate>
         <div class="f">
           <label for="f-name">Имя<span aria-hidden="true">*</span></label>
-          <input id="f-name" name="name" type="text" autocomplete="name" placeholder="Анна" required aria-describedby="f-name-err">
+          <input id="f-name" name="name" type="text" autocomplete="name" placeholder="Жандос" required aria-describedby="f-name-err">
           <p class="f__err" id="f-name-err"></p>
         </div>
         <div class="f">
@@ -1484,8 +1484,8 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
           await w(500); add('in', 'Хочу записаться на консультацию завтра после обеда');
           await w(600); fill('svc', 'Консультация');
           await w(700); add('out', 'Свободно в 15:30. Как к вам обращаться?');
-          await w(1000); add('in', 'Анна. 15:30 подходит');
-          await w(450); fill('name', 'Анна');
+          await w(1000); add('in', 'Жандос. 15:30 подходит');
+          await w(450); fill('name', 'Жандос');
           await w(350); fill('time', 'Завтра, 15:30');
           await w(800); fill('status', '<span class="mp-acc"></span>Передана менеджеру', true);
         } },
@@ -1531,7 +1531,7 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
         async play(s, w) {
           const type = async (k, text) => { const el = s.querySelector(`[data-f="${k}"]`); el.classList.add('is-typing');
             for (const ch of text) { el.textContent += ch; await w(45); } el.classList.remove('is-typing'); };
-          await w(450); await type('a', 'Анна');
+          await w(450); await type('a', 'Жандос');
           await w(200); await type('b', '@anna');
           await w(200); await type('c', 'Хотим, чтобы заявки с сайта сами попадали в CRM');
           await w(300); s.querySelector('.mp-form__btn').classList.add('is-on');
@@ -1820,8 +1820,8 @@ body.menu-open .ck { visibility: hidden; opacity: 0; transition: none; }
         await typing(1200);
         add('out', 'Добрый день! Свободно в 15:30. Как к вам обращаться?');
         await x.w(1300);
-        add('in', 'Анна. 15:30 подходит');
-        await x.w(500); fill('name', 'Анна');
+        add('in', 'Жандос. 15:30 подходит');
+        await x.w(500); fill('name', 'Жандос');
         await x.w(400); fill('time', 'Завтра, 15:30');
         await typing(1100);
         add('out', 'Готово, вы записаны. Менеджер подтвердит запись');
